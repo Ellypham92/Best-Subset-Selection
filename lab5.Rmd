@@ -1,0 +1,281 @@
+---
+title: "Lab 5:  Variable selection"
+output: html_notebook
+---
+
+Complete problem 3 parts a, b, and c from Ch 7 of *MARR*.  
+
+On parts a, b, and c, substitute these instructions --  **Identify the optimal model or models based on $R^2_{adj}, C_p$, and $BIC$ from the approach based on ... ** -- for the instructions in *MARR*.   
+
+```{r}
+library(tidyverse)
+library(leaps)
+library(alr4)
+library(MASS)
+```
+
+```{r}
+##read the file
+pgatour <- read.csv("~/Desktop/stat5310/lab5/pgatour2006.csv")
+str(pgatour)
+head(pgatour)
+```
+
+
+```{r}
+## pairwise scatter plot to examine 
+pairs(pgatour[,-1:-2], col="darkgreen", pch=".")
+```
+
+```{r}
+## multivariate Box-Cox transformation
+summary(powerTransform(cbind(PrizeMoney,DrivingAccuracy, GIR, PuttingAverage, BirdieConversion, SandSaves, Scrambling, PuttsPerRound) ~1, data=pgatour))
+```
+```{r}
+## take log() for every variables to get closer to multivariate normality because there is a 0 in Rounded Pwr
+pairs(log(PrizeMoney)~ log(DrivingAccuracy) + log(GIR) + log(PuttingAverage) + log(BirdieConversion) + log(SandSaves) + log(Scrambling) + log(PuttsPerRound), data=pgatour, col="darkgreen", pch=".")
+```
+```{r}
+## transformed data
+logpgatour <- pgatour
+logpgatour[,3:10] <- log(pgatour[,3:10])
+head(logpgatour,3)
+
+## fit MLR model
+logmodel <- lm(PrizeMoney ~ DrivingAccuracy + GIR + PuttingAverage + BirdieConversion + SandSaves + Scrambling + PuttsPerRound, data = logpgatour)
+summary(logmodel)
+```
+**We can see that there are two variables that are statistically significant - GIR and BirdieConversion. The F-statistic is also highly significant. **
+**There are three variables that have negative sign. **
+```{r}
+cor(logpgatour[,3:12]) %>% round(3)
+```
+### Subset Selection
+
+```{r}
+## All possible subsets approach
+regfit.best = regsubsets(PrizeMoney ~ DrivingAccuracy + GIR + PuttingAverage + BirdieConversion + SandSaves + Scrambling + PuttsPerRound, data = logpgatour)
+summary(regfit.best)
+
+## Check on fit measures
+for(k in names(summary(regfit.best))[2:6]){
+   print(k)
+   print(summary(regfit.best)[[k]])
+}
+```
+
+```{r}
+## Adjusted R-square and make a plot
+which.max(summary(regfit.best)$adjr2)
+plot(summary(regfit.best)$adjr2, type="l", ylab="Adjusted R-square")
+points(5, summary(regfit.best)$adjr2[5], col="6", pch=19)
+plot(regfit.best, scale="adjr2")
+
+## Based on the adjusted R-square, model with 5 predictors is the optimal model because it has the largest adjusted R-square output where the predictors are log(GIR), log(BirdieConversion), log(SandSaves), log(Scrambling), log(PuttsPerRound). 
+
+```
+```{r}
+## BIC and make a plot
+which.min(summary(regfit.best)$bic)
+plot(summary(regfit.best)$bic, type="l", ylab="BIC")
+points(3, summary(regfit.best)$bic[3], col="6", pch=19)
+plot(regfit.best, scale="bic")
+
+## Based on BIC values, model with 3 predictors is the optimal model (-133.59183) because it has the smallest bic output where the predictors are log(GIR), log(BirdieConversion), log(Scrambling).
+```
+
+```{r}
+## cp and make a plot
+which.min(summary(regfit.best)$cp)
+plot(summary(regfit.best)$cp, type="l", ylab="cp")
+points(5, summary(regfit.best)$cp[5], col="6", pch=19)
+plot(regfit.best, scale="Cp")
+
+## Based on cp values, models with 5 predictors is the optimal model (4.130476) because it has the smallest cp output where the predictors are log(GIR), log(BirdieConversion), log(SandSaves), log(Scrambling), log(PuttsPerRound). 
+```
+```{r}
+## fit model with 5 predictors and model with 3 predictors to compare 
+mod.5p <- lm(PrizeMoney ~ GIR + BirdieConversion + SandSaves + Scrambling + PuttsPerRound, data = logpgatour) # 5 predictors
+mod.3p <- lm(PrizeMoney ~ GIR + BirdieConversion + Scrambling , data = logpgatour) #3 predictors
+summary(mod.5p)$coeff %>% round(4)
+summary(mod.3p)$coeff %>% round(4)
+
+
+## After fitting the models, the model with 3 predictors looks better given all three predictors are statistically significant.
+
+```
+
+### Backward selection
+
+```{r}
+## Backward selection
+regfit.bwd = regsubsets(PrizeMoney ~ DrivingAccuracy + GIR + PuttingAverage + BirdieConversion + SandSaves + Scrambling + PuttsPerRound, data = logpgatour, method='backward')
+summary(regfit.bwd)
+
+for(k in names(summary(regfit.bwd))){
+   print(k)
+   print(summary(regfit.bwd)[[k]])
+}
+
+
+```
+
+```{r}
+## Adjusted R-square and make a plot
+which.max(summary(regfit.bwd)$adjr2)
+plot(summary(regfit.bwd)$adjr2, type="l", ylab="Adjusted R-square")
+points(5, summary(regfit.best)$adjr2[5], col="6", pch=19)
+plot(regfit.bwd, scale="adjr2")
+
+## Based on adjusted R-square values, model with 5 predictors is the optimal model because it has the largest adjr2 output (0.5465508) where the predictors are log(GIR), log(BirdieConversion), log(SandSaves), log(Scrambling), log(PuttsPerRound).
+```
+
+
+```{r}
+## BIC and make a plot
+which.min(summary(regfit.bwd)$bic)
+plot(summary(regfit.bwd)$bic, type="l", ylab="BIC")
+points(3, summary(regfit.bwd)$bic[3], col="6", pch=19)
+plot(regfit.bwd, scale="bic")
+
+ 
+## Based on BIC values, model with 3 predictors is the optimal model because it has the smallest bic output  (-133.59183) where the predictors are log(GIR), log(BirdieConversion),log(Scrambling).
+```
+
+
+```{r}
+## cp and make a plot
+which.min(summary(regfit.bwd)$cp)
+plot(summary(regfit.bwd)$cp, type="l", ylab="cp")
+points(5, summary(regfit.bwd)$cp[5], col="6", pch=19)
+plot(regfit.bwd, scale="Cp")
+
+## Based on cp values, models with 5 predictors is the optimal model because it has smallest cp output (4.130476)	where the predictors are log(GIR), log(BirdieConversion), log(SandSaves), log(Scrambling), log(PuttsPerRound). 
+```
+```{r}
+## Comparing model with 5 predictors vs model with 3 predictors
+
+summary(mod.5p)$coeff %>% round(3)
+summary(mod.3p)$coeff %>% round(3)
+
+## After fitting the models, the model with 3 predictors looks better because the the three variables have its p-values approximately 0 which are statistically significant. 
+```
+
+
+### Forward selection
+
+```{r}
+## Forward selection
+regfit.fwd = regsubsets(PrizeMoney ~ DrivingAccuracy + GIR + PuttingAverage + BirdieConversion + SandSaves + Scrambling + PuttsPerRound, data = logpgatour, method='forward')
+summary(regfit.fwd)
+
+names(summary(regfit.fwd))
+
+for(k in names(summary(regfit.fwd))){
+   print(k)
+   print(summary(regfit.fwd)[[k]])
+}
+
+```
+```{r}
+## Adjusted R-square and make a plot
+which.max(summary(regfit.fwd)$adjr2)
+plot(summary(regfit.fwd)$adjr2, type="l", ylab="Adjusted R-square")
+points(5, summary(regfit.fwd)$adjr2[5], col="6", pch=19)
+plot(regfit.fwd, scale="adjr2")
+
+## Based on adjusted R-square values, model with 5 predictors is the optimal model because it has the largest adjr2 (0.5465508) where the predictors are log(GIR), log(BirdieConversion), log(SandSaves), log(Scrambling), log(PuttsPerRound). 
+```
+
+
+```{r}
+## BIC and make a plot
+which.min(summary(regfit.fwd)$bic)
+plot(summary(regfit.fwd)$bic, type="l", ylab="BIC")
+points(4, summary(regfit.fwd)$bic[4], col="6", pch=19)
+plot(regfit.fwd, scale="bic")
+
+## Based on BIC values, model with 4 predictors is the optimal model because it has the smallest bic output (-131.04832) where the predictors are log(GIR), log(BirdieConversion),log(Scrambling), log(PuttsPerRound).
+```
+
+
+
+```{r}
+## cp and make a plot
+which.min(summary(regfit.fwd)$cp)
+plot(summary(regfit.fwd)$cp, type="l", ylab="cp")
+points(5, summary(regfit.fwd)$cp[5], col="6", pch=19)
+plot(regfit.fwd, scale="Cp")
+
+## Based on cp values, models with 5 predictors is the optimal model because it has the smallest bic  output (4.130476)	where the predictors are log(GIR), log(BirdieConversion), log(SandSaves), log(Scrambling), log(PuttsPerRound). 
+```
+```{r}
+## Comparing model with 5 predictors vs model with 4 predictors
+mod.4p <- lm(PrizeMoney ~ GIR + BirdieConversion + Scrambling + PuttsPerRound, data = logpgatour) 
+
+summary(mod.5p)$coeff %>% round(3)
+summary(mod.4p)$coeff %>% round(3)
+
+
+## After fitting the models, the model with 4 predictors looks better because the variables are more statistically significant.
+```
+
+
+Bonus problem (10 points)
+
+Use a pencil to compute $BIC - AIC$. The answer will depend on $p$ and $n$ so let's call it $f(p,n)$.  
+Using latex instead of a pencil would make this part look really good. 
+
+Write an R function called `AICfromBIC()` to compute $AIC$ from $BIC$.  Inputs to your function should be $n, p$ and $BIC$.  Inside the function there's not much to do:  compute $f(p,n)$ and then return $BIC - f(p,n)$
+
+Use your function to convert $BIC$ values to $AIC$ in parts a, b, and c.  Then use $AIC$ to identify the optimal model in each part.  
+
+```{r}
+
+AICfromBIC <- function(n, p, BIC) {
+  n <- nrow
+  for(p in 1:p) {
+  AIC <- BIC - log(n) * p + 2 * p
+}
+return(AIC)
+}
+
+
+```
+```{r}
+## AIC for all possible subsets approach
+n <- nrow(logpgatour)
+p <- 7
+BIC <- summary(regfit.best)$bic
+AICfromBIC(n, p, BIC)
+
+which.min(AICfromBIC(n, p, BIC))
+
+## Based on AIC values, model with 4 predictors is the optimal model because it has the smallest aic output (-153.9951) where the predictors are log(GIR), log(BirdieConversion),log(Scrambling), log(PuttsPerRound).
+```
+
+```{r}
+## AIC for backward selection
+BIC <- summary(regfit.bwd)$bic
+AICfromBIC(n, p, BIC)
+which.min(AICfromBIC(n, p, BIC))
+
+ 
+## Based on AIC values, model with 3 predictors is the optimal model because it has the smallest aic output  (-156.53863) where the predictors are log(GIR), log(BirdieConversion),log(Scrambling).
+```
+```{r}
+## AIC for forward selection
+BIC <- summary(regfit.fwd)$bic
+AICfromBIC(n, p, BIC)
+which.min(AICfromBIC(n, p, BIC))
+
+## Based on AIC values, model with 4 predictors is the optimal model because it has the smallest aic output (-153.9951) where the predictors are log(GIR), log(BirdieConversion),log(Scrambling), log(PuttsPerRound).
+```
+```{r}
+## Comparing model with 3 predictors vs model with 4 predictors
+summary(mod.3p)$coef %>% round(3)
+summary(mod.4p)$coef %>% round(3)
+
+## We choose model with 3 predictors because the three variables are more statistically significant in comparison to the model with 4 predictors.
+```
+
