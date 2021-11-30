@@ -24,7 +24,7 @@ head(pgatour)
 
 ```{r}
 ## pairwise scatter plot to examine 
-pairs(pgatour[,-1:-2], col="darkgreen", pch=".")
+pairs(pgatour[,c(-1, -2, -4, -11)], col="darkgreen", pch=".")
 ```
 
 ```{r}
@@ -32,13 +32,14 @@ pairs(pgatour[,-1:-2], col="darkgreen", pch=".")
 summary(powerTransform(cbind(PrizeMoney,DrivingAccuracy, GIR, PuttingAverage, BirdieConversion, SandSaves, Scrambling, PuttsPerRound) ~1, data=pgatour))
 ```
 ```{r}
-## take log() for every variables to get closer to multivariate normality because there is a 0 in Rounded Pwr
-pairs(log(PrizeMoney)~ log(DrivingAccuracy) + log(GIR) + log(PuttingAverage) + log(BirdieConversion) + log(SandSaves) + log(Scrambling) + log(PuttsPerRound), data=pgatour, col="darkgreen", pch=".")
+## take log() for PrizeMoney 
+pairs(log(PrizeMoney)~ DrivingAccuracy + GIR + PuttingAverage + BirdieConversion + SandSaves + Scrambling + PuttsPerRound, data=pgatour, col="darkgreen", pch=".")
 ```
 ```{r}
 ## transformed data
 logpgatour <- pgatour
-logpgatour[,3:10] <- log(pgatour[,3:10])
+logpgatour <- logpgatour %>% select(PrizeMoney, DrivingAccuracy, GIR, PuttingAverage, BirdieConversion, SandSaves, Scrambling, PuttsPerRound) 
+logpgatour$PrizeMoney <- log(logpgatour$PrizeMoney)
 head(logpgatour,3)
 
 ## fit MLR model
@@ -48,7 +49,7 @@ summary(logmodel)
 **We can see that there are two variables that are statistically significant - GIR and BirdieConversion. The F-statistic is also highly significant. **
 **There are three variables that have negative sign. **
 ```{r}
-cor(logpgatour[,3:12]) %>% round(3)
+cor(logpgatour[,]) %>% round(3)
 ```
 ### Subset Selection
 
@@ -230,33 +231,55 @@ Write an R function called `AICfromBIC()` to compute $AIC$ from $BIC$.  Inputs t
 
 Use your function to convert $BIC$ values to $AIC$ in parts a, b, and c.  Then use $AIC$ to identify the optimal model in each part.  
 
-```{r}
 
+- Akaike information criterion: $AIC = \frac{1}{n\hat \sigma^2}(RSS + 2p\hat \sigma^2)$
+- Bayes information criterion: $BIC = \frac{1}{n\hat \sigma^2}(RSS + log(n)p\hat \sigma^2)$
+- AIC from BIC: $AIC = BIC - \frac{p}{n}(\log(n)-2)$
+
+```{r}
+## apply above formula to write function 
 AICfromBIC <- function(n, p, BIC) {
-  n <- nrow
   for(p in 1:p) {
-  AIC <- BIC - log(n) * p + 2 * p
+     AIC <- BIC - ((p / n)* (log(n) - 2)) 
 }
 return(AIC)
 }
 
+```
+```{r}
+## using BIC and AIC formulas to write function
+
+AICfromBIC <- function(n, p, BIC) {
+  for(p in 1:p) {
+    AIC <- BIC- (  (1/n* (RSS+log(n)*p*sigma2)) - (1/n*(RSS+2*p*sigma2))   )
+}
+return(AIC)
+}
 
 ```
+
 ```{r}
 ## AIC for all possible subsets approach
 n <- nrow(logpgatour)
 p <- 7
+sigma2 <- (summary(logmodel)$sigma)^2
+RSS <- sum(resid(logmodel)^2)
+
+
 BIC <- summary(regfit.best)$bic
+BIC
 AICfromBIC(n, p, BIC)
 
 which.min(AICfromBIC(n, p, BIC))
 
-## Based on AIC values, model with 4 predictors is the optimal model because it has the smallest aic output (-153.9951) where the predictors are log(GIR), log(BirdieConversion),log(Scrambling), log(PuttsPerRound).
+
+## Based on AIC values, model with 3 predictors is the optimal model because it has the smallest aic output (-133.70890) where the predictors are log(GIR), log(BirdieConversion),log(Scrambling).
 ```
 
 ```{r}
 ## AIC for backward selection
 BIC <- summary(regfit.bwd)$bic
+BIC
 AICfromBIC(n, p, BIC)
 which.min(AICfromBIC(n, p, BIC))
 
@@ -266,6 +289,7 @@ which.min(AICfromBIC(n, p, BIC))
 ```{r}
 ## AIC for forward selection
 BIC <- summary(regfit.fwd)$bic
+BIC
 AICfromBIC(n, p, BIC)
 which.min(AICfromBIC(n, p, BIC))
 
